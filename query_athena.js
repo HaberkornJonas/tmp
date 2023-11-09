@@ -63,10 +63,11 @@ function checkQueryCreateStatus(queryobj) {
     });
 }
 
-function getQueryResultByExecutionId(queryobj) {
+function getQueryResultByExecutionId(queryobj, nextToken = undefined) {
     return new Promise((resolve, reject) => {
         const params = {
-            QueryExecutionId: queryobj.QueryExecutionId
+            QueryExecutionId: queryobj.QueryExecutionId,
+            NextToken: nextToken
         };
         client.getQueryResults(params, (err, data) => {
             if (err) reject(err);
@@ -112,12 +113,17 @@ async function main() {
         }
     }
 
+    let rows = [];
     let result = await getQueryResultByExecutionId(queryobj);
+    rows = rows.concat(result.ResultSet.Rows);
+    while (!!result.NextToken) {
+        result = await getQueryResultByExecutionId(queryobj, result.NextToken);
+        rows = rows.concat(result.ResultSet.Rows);
+    }
     let end = await stopQueryExecutionId(queryobj);
-
-    if (result.ResultSet.Rows.length > 1) {
-        const columns = result.ResultSet.Rows[0].Data.map(c => c.VarCharValue);
-        formatted = result.ResultSet.Rows.slice(1).map(r => formatDataRow(columns, r));
+    if (rows.length > 1) {
+        const columns = rows[0].Data.map(c => c.VarCharValue);
+        formatted = rows.slice(1).map(r => formatDataRow(columns, r));
         fs.writeFileSync(`/home/ubuntu/${filename}.json`, JSON.stringify(formatted));
     } else {
         fs.writeFileSync(`/home/ubuntu/${filename}.json`, '[]');
